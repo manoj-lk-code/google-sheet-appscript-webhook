@@ -1,0 +1,123 @@
+var WEBHOOK_URL_PROPERTY = "webhookUrl";
+var DELAY_TIME_PROPERTY = "delayTime";
+
+function onOpen() {
+  var ui = SpreadsheetApp.getUi();
+  ui.createMenu('Growthens Webhook')
+    .addItem('Set Webhook URL', 'setWebhookUrl')
+    .addItem('Set Delay Time', 'setDelayTime')
+    .addItem('Trigger Script', 'triggerScript')
+    .addToUi();
+}
+
+function setWebhookUrl() {
+  var ui = SpreadsheetApp.getUi();
+  var response = ui.prompt("Set Webhook URL", "Enter the webhook URL:", ui.ButtonSet.OK_CANCEL);
+  var button = response.getSelectedButton();
+  var webhookUrl = response.getResponseText();
+
+  if (button === ui.Button.OK && webhookUrl) {
+    try {
+      PropertiesService.getScriptProperties().setProperty(WEBHOOK_URL_PROPERTY, webhookUrl);
+      ui.alert("Webhook URL set successfully!");
+
+      var testResponse = ui.alert("Send Test Data", "Do you want to send test data (2nd row)?", ui.ButtonSet.YES_NO);
+      var testButton = testResponse === ui.Button.YES;
+
+      if (testButton) {
+        var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+        var headerRow = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+        var testRow = sheet.getRange(2, 1, 1, sheet.getLastColumn()).getValues()[0];
+        sendRow(headerRow, testRow);
+      }
+    } catch (error) {
+      ui.alert("An error occurred while setting the webhook URL: " + error);
+    }
+  } else {
+    ui.alert("Invalid webhook URL. Please try again.");
+  }
+}
+
+function setDelayTime() {
+  var ui = SpreadsheetApp.getUi();
+  var response = ui.prompt("Set Delay Time", "Enter the delay time (in seconds):", ui.ButtonSet.OK_CANCEL);
+  var button = response.getSelectedButton();
+  var delayTimeInSeconds = parseInt(response.getResponseText());
+
+  if (button === ui.Button.OK && !isNaN(delayTimeInSeconds)) {
+    try {
+      var delayTimeInMillis = delayTimeInSeconds * 1000; // Convert to milliseconds
+      PropertiesService.getScriptProperties().setProperty(DELAY_TIME_PROPERTY, delayTimeInMillis);
+      ui.alert("Delay time set successfully!");
+    } catch (error) {
+      ui.alert("An error occurred while setting the delay time: " + error);
+    }
+  } else {
+    ui.alert("Invalid delay time. Please try again.");
+  }
+}
+
+function triggerScript() {
+  var webhookUrl = PropertiesService.getScriptProperties().getProperty(WEBHOOK_URL_PROPERTY);
+
+  if (!webhookUrl) {
+    SpreadsheetApp.getUi().alert("Webhook URL is not set. Please set the webhook URL first.");
+    return;
+  }
+
+  var delayTime = parseInt(PropertiesService.getScriptProperties().getProperty(DELAY_TIME_PROPERTY));
+  if (!delayTime) {
+    delayTime = 10000; // Default delay time in milliseconds (10 seconds)
+  }
+
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    var headerRow = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    var dataRange = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn());
+    var data = dataRange.getValues();
+
+    for (var i = 0; i < data.length; i++) {
+      if (i === 0 && data.length > 1) {
+        continue; // Skip the second row
+      }
+      var row = data[i];
+      sendRowWithDelay(headerRow, row, i, delayTime);
+    }
+  } catch (error) {
+    SpreadsheetApp.getUi().alert("An error occurred while triggering the script: " + error);
+  }
+}
+
+function sendRowWithDelay(headerRow, row, index, delayTime) {
+  Utilities.sleep(delayTime);
+  try {
+    sendRow(headerRow, row);
+  } catch (error) {
+    SpreadsheetApp.getUi().alert("An error occurred while sending a row: " + error);
+  }
+}
+
+function sendRow(headerRow, row) {
+  var webhookUrl = PropertiesService.getScriptProperties().getProperty(WEBHOOK_URL_PROPERTY);
+  if (!webhookUrl) {
+    throw new Error("Webhook URL is not set.");
+  }
+  try {
+    // Add your logic to send the row data to the webhook URL
+    // Example: Sending a POST request with the row values
+    var payload = {};
+    for (var i = 0; i < headerRow.length; i++) {
+      var header = headerRow[i];
+      var value = row[i];
+      payload[header] = value;
+    }
+    var options = {
+      method: "post",
+      contentType: "application/json",
+      payload: JSON.stringify(payload)
+    };
+    UrlFetchApp.fetch(webhookUrl, options);
+  } catch (error) {
+    throw new Error("An error occurred while sending a row: " + error);
+  }
+}
