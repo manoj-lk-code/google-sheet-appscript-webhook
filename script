@@ -28,7 +28,7 @@ function setWebhookUrl() {
         var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
         var headerRow = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
         var testRow = sheet.getRange(2, 1, 1, sheet.getLastColumn()).getValues()[0];
-        sendRow(headerRow, testRow);
+        sendRow(headerRow, testRow, 2); // Include row index (2)
       }
     } catch (error) {
       ui.alert("An error occurred while setting the webhook URL: " + error);
@@ -81,7 +81,8 @@ function triggerScript() {
         continue; // Skip the second row
       }
       var row = data[i];
-      sendRowWithDelay(headerRow, row, i, delayTime);
+      var rowIndex = i + 2; // Add 2 to the index to account for the skipped row and 0-based index
+      sendRowWithDelay(headerRow, row, rowIndex, delayTime); // Include row index
     }
   } catch (error) {
     SpreadsheetApp.getUi().alert("An error occurred while triggering the script: " + error);
@@ -91,13 +92,13 @@ function triggerScript() {
 function sendRowWithDelay(headerRow, row, index, delayTime) {
   Utilities.sleep(delayTime);
   try {
-    sendRow(headerRow, row);
+    sendRow(headerRow, row, index); // Include row index
   } catch (error) {
     SpreadsheetApp.getUi().alert("An error occurred while sending a row: " + error);
   }
 }
 
-function sendRow(headerRow, row) {
+function sendRow(headerRow, row, index) {
   var webhookUrl = PropertiesService.getScriptProperties().getProperty(WEBHOOK_URL_PROPERTY);
   if (!webhookUrl) {
     throw new Error("Webhook URL is not set.");
@@ -105,7 +106,9 @@ function sendRow(headerRow, row) {
   try {
     // Add your logic to send the row data to the webhook URL
     // Example: Sending a POST request with the row values
-    var payload = {};
+    var payload = {
+      "rowIndex": index // Include row index in the payload
+    };
     for (var i = 0; i < headerRow.length; i++) {
       var header = headerRow[i];
       var value = row[i];
